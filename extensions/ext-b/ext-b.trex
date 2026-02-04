@@ -1,1 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns="http://tableau.com/api/extensions/manifest" version="1.0">
+  <extension id="com.alex.filtercontext.apply" version="0.1.0" name="Apply context filters on load">
+    <description>Reads context_id from URL and applies filters.</description>
+    <author name="Alex" email="alex@example.com" organization="POC"/>
+    <minApiVersion>1.5</minApiVersion>
+
+    <dashboard-extension>
+      <source-location>https://YOUR_DOMAIN/extensions/ext-b/index.html</source-location>
+      <permissions>
+        <permission>full data</permission>
+        <permission>network</permission>
+      </permissions>
+    </dashboard-extension>
+  </extension>
+</manifest>
 
