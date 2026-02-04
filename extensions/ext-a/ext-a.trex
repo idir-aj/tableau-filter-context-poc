@@ -1,1 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns="http://tableau.com/api/extensions/manifest" version="1.0">
+  <extension id="com.alex.filtercontext.save" version="0.1.0" name="Save filters & open workbook B">
+    <description>Capture filters in Workbook A, store context, navigate to Workbook B.</description>
+    <author name="Alex" email="alex@example.com" organization="POC"/>
+    <minApiVersion>1.5</minApiVersion>
+
+    <dashboard-extension>
+      <source-location>https://YOUR_DOMAIN/extensions/ext-a/index.html</source-location>
+      <permissions>
+        <permission>full data</permission>
+        <permission>network</permission>
+      </permissions>
+    </dashboard-extension>
+  </extension>
+</manifest>
 
