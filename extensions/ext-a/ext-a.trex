@@ -1,17 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns="http://tableau.com/api/extensions/manifest" version="1.0">
-  <extension id="com.alex.filtercontext.save" version="0.1.0" name="Save filters & open workbook B">
-    <description>Capture filters in Workbook A, store context, navigate to Workbook B.</description>
-    <author name="Alex" email="alex@example.com" organization="POC"/>
-    <minApiVersion>1.5</minApiVersion>
+<manifest manifest-version="0.1" xmlns="http://www.tableau.com/xml/extension_manifest">
+  <dashboard-extension id="com.alex.filtercontext.save" extension-version="0.1.0">
+    <default-locale>fr_FR</default-locale>
+    <name>Save filters &amp; open workbook B</name>
+    <description>Capture filters in Workbook A, store context, then navigate to Workbook B.</description>
+    <author name="Alex" email="alex@example.com" organization="POC" website="https://example.com"/>
+    <min-api-version>1.0</min-api-version>
 
-    <dashboard-extension>
-      <source-location>https://resilient-kitsune-1aa0c7.netlify.app/index.html</source-location>
-      <permissions>
-        <permission>full data</permission>
-        <permission>network</permission>
-      </permissions>
-    </dashboard-extension>
-  </extension>
+    <source-location>
+      <url>https://resilient-kitsune-1aa0c7.netlify.app/index.html</url>
+    </source-location>
+
+    <permissions>
+      <permission>full data</permission>
+    </permissions>
+  </dashboard-extension>
 </manifest>
-
