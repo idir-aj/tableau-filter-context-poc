@@ -1,1 +1,103 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Apply Context Filters</title>
+  <script src="https://cdn.jsdelivr.net/npm/tableau.extensions@1.12.0/dist/tableau.extensions.1.latest.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 12px; }
+    .small { opacity:.75; font-size:12px; }
+    input { width: 100%; padding: 6px; }
+    button { margin-top: 10px; padding: 8px 10px; }
+  </style>
+</head>
+<body>
+  <h3>Apply imported filters</h3>
+
+  <label>API Base URL</label>
+  <input id="apiBase" value="https://YOUR_API_DOMAIN" />
+
+  <label>Worksheet name to apply filters on</label>
+  <input id="wsName" placeholder="ex: Details" />
+
+  <label>Filter field names (comma-separated)</label>
+  <input id="filterNames" value="Pays,Produit,Categorie" />
+
+  <button id="applyBtn">Apply now</button>
+  <div id="status" class="small"></div>
+
+<script>
+(async function () {
+  await tableau.extensions.initializeAsync();
+
+  const status = (msg) => document.getElementById("status").textContent = msg;
+
+  function getContextIdFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("context_id");
+  }
+
+  async function applyFilters(worksheet, filters, wantedNames) {
+    // Apply in sequence to keep it simple (and predictable)
+    for (const name of wantedNames) {
+      const values = filters[name];
+      if (!values || values.length === 0) {
+        // ALL => do nothing
+        continue;
+      }
+      // REPLACE => multi-select exact set
+      await worksheet.applyFilterAsync(name, values, tableau.FilterUpdateType.Replace);
+    }
+  }
+
+  async function runApply() {
+    try {
+      const apiBase = document.getElementById("apiBase").value.replace(/\/$/, "");
+      const wsName = document.getElementById("wsName").value.trim();
+      const filterNames = document.getElementById("filterNames").value.split(",").map(s => s.trim()).filter(Boolean);
+
+      const contextId = getContextIdFromUrl();
+      if (!contextId) {
+        status("No context_id in URL → nothing to apply.");
+        return;
+      }
+      if (!apiBase || !wsName) {
+        status("Please fill API Base and worksheet name.");
+        return;
+      }
+
+      status(`Loading context ${contextId}…`);
+      const resp = await fetch(`${apiBase}/contexts/${encodeURIComponent(contextId)}`);
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`GET /contexts/{id} failed: ${resp.status} ${txt}`);
+      }
+      const data = await resp.json();
+
+      const dashboard = tableau.extensions.dashboardContent.dashboard;
+      const worksheet = dashboard.worksheets.find(w => w.name === wsName);
+      if (!worksheet) {
+        status(`Worksheet '${wsName}' not found.`);
+        return;
+      }
+
+      status("Applying filters…");
+      await applyFilters(worksheet, data.filters || {}, filterNames);
+
+      status("Done. (User can now change filters freely)");
+    } catch (e) {
+      status(String(e));
+      console.error(e);
+    }
+  }
+
+  // auto-apply on load
+  runApply();
+
+  // manual re-apply button
+  document.getElementById("applyBtn").addEventListener("click", runApply);
+})();
+</script>
+</body>
+</html>
 
