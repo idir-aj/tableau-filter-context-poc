@@ -1,17 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns="http://tableau.com/api/extensions/manifest" version="1.0">
-  <extension id="com.alex.filtercontext.apply" version="0.1.0" name="Apply context filters on load">
-    <description>Reads context_id from URL and applies filters.</description>
-    <author name="Alex" email="alex@example.com" organization="POC"/>
-    <minApiVersion>1.5</minApiVersion>
+<manifest manifest-version="0.1" xmlns="http://www.tableau.com/xml/extension_manifest">
+  <dashboard-extension id="com.alex.filtercontext.apply" extension-version="0.1.0">
+    <default-locale>fr_FR</default-locale>
+    <name>Apply imported filters</name>
+    <description>Reads context_id from URL and applies filters on load.</description>
+    <author name="Alex" email="alex@example.com" organization="POC" website="https://example.com"/>
+    <min-api-version>1.0</min-api-version>
 
-    <dashboard-extension>
-      <source-location>https://capable-tanuki-dc4c77.netlify.app/index.html</source-location>
-      <permissions>
-        <permission>full data</permission>
-        <permission>network</permission>
-      </permissions>
-    </dashboard-extension>
-  </extension>
+    <source-location>
+      <url>https://capable-tanuki-dc4c77.netlify.app/index.html</url>
+    </source-location>
+
+    <permissions>
+      <permission>full data</permission>
+    </permissions>
+  </dashboard-extension>
 </manifest>
+
 
