@@ -6,7 +6,7 @@
     <minApiVersion>1.5</minApiVersion>
 
     <dashboard-extension>
-      <source-location>https://YOUR_DOMAIN/extensions/ext-a/index.html</source-location>
+      <source-location>https://resilient-kitsune-1aa0c7.netlify.app/index.html</source-location>
       <permissions>
         <permission>full data</permission>
         <permission>network</permission>
