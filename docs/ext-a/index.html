@@ -17,6 +17,7 @@
 <script>
 (async () => {
   await tableau.extensions.initializeAsync({ configure: openConfigDialog });
+  applyButtonUxFromSettings();
 
   // ✅ Hardcode API URL here
   const API_BASE = "https://tableau-filter-context-poc.onrender.com";
@@ -29,11 +30,20 @@
     if (!raw) return fallback;
     try { return JSON.parse(raw); } catch { return fallback; }
   }
-
+  
   async function openConfigDialog() {
-    // config.html is hosted next to index.html (GitHub Pages)
     const configUrl = new URL("config.html", window.location.href).toString();
-    await tableau.extensions.ui.displayDialogAsync(configUrl, "", { height: 560, width: 520 });
+    const result = await tableau.extensions.ui.displayDialogAsync(
+      configUrl,
+      "",
+      { height: 600, width: 520 }
+    );
+  
+    // Si l’utilisateur a cliqué "Save" dans le dialog
+    if (result === "saved") {
+      await tableau.extensions.settings.refreshAsync(); // récupère les nouvelles valeurs
+      applyButtonUxFromSettings();                      // applique immédiatement
+    }
   }
 
   function mustGetConfig() {
@@ -42,6 +52,24 @@
     const filterFieldNames = getJsonSetting("filterFieldNames", []);
     return { targetUrl, worksheetName, filterFieldNames };
   }
+
+  function applyButtonUxFromSettings() {
+    const btn = document.getElementById("goBtn");
+  
+    const label = tableau.extensions.settings.get("buttonLabel");
+    if (label) btn.textContent = label;
+  
+    const fg = tableau.extensions.settings.get("buttonFg");
+    if (fg) btn.style.color = fg;
+  
+    const bg = tableau.extensions.settings.get("buttonBg");
+    if (bg) btn.style.background = bg;
+  
+    // un peu de style par défaut
+    btn.style.border = "1px solid transparent";
+    btn.style.borderRadius = "10px";
+  }
+
 
   document.getElementById("goBtn").addEventListener("click", async () => {
     let popup = null;
