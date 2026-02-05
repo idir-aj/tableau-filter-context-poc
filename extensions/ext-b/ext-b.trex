@@ -11,15 +11,10 @@
       <url>https://capable-tanuki-dc4c77.netlify.app/index.html</url>
     </source-location>
 
-    <icon>
-      <data>
-        iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2l0AAAAASUVORK5CYII=
-      </data>
-    </icon>
+    <icon>iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2l0AAAAASUVORK5CYII=</icon>
 
     <permissions>
       <permission>full data</permission>
-      <permission>network</permission>
     </permissions>
   </dashboard-extension>
 </manifest>
