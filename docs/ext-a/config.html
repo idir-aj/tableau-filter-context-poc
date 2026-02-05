@@ -22,6 +22,15 @@
   <label>Target URL (Workbook B)</label>
   <input id="targetUrl" placeholder="https://.../views/DashB/Dashboard1?:showVizHome=no" />
 
+  <label>Label du bouton</label>
+  <input id="buttonLabel" placeholder="Ex: Ouvrir l’analyse détaillée" />
+  
+  <label>Couleur du texte (hex)</label>
+  <input id="buttonFg" placeholder="#FFFFFF" />
+  
+  <label>Couleur du fond (hex)</label>
+  <input id="buttonBg" placeholder="#2F6FED" />
+
   <label>Worksheet source (dans A)</label>
   <select id="wsSelect"></select>
 
@@ -49,8 +58,14 @@
   const savedTargetUrl = tableau.extensions.settings.get("targetUrl") || "";
   const savedWs = tableau.extensions.settings.get("worksheetName") || "";
   const savedFieldNames = new Set(getJsonSetting("filterFieldNames", []));
+  const savedButtonLabel = tableau.extensions.settings.get("buttonLabel") || "";
+  const savedButtonFg = tableau.extensions.settings.get("buttonFg") || "";
+  const savedButtonBg = tableau.extensions.settings.get("buttonBg") || "";
 
   document.getElementById("targetUrl").value = savedTargetUrl;
+  document.getElementById("buttonLabel").value = savedButtonLabel;
+  document.getElementById("buttonFg").value = savedButtonFg;
+  document.getElementById("buttonBg").value = savedButtonBg;
 
   // Populate worksheets
   const wsSelect = document.getElementById("wsSelect");
@@ -116,6 +131,10 @@
     tableau.extensions.settings.set("targetUrl", targetUrl);
     tableau.extensions.settings.set("worksheetName", worksheetName);
     tableau.extensions.settings.set("filterFieldNames", JSON.stringify(chosen));
+    tableau.extensions.settings.set("buttonLabel", document.getElementById("buttonLabel").value.trim());
+    tableau.extensions.settings.set("buttonFg", document.getElementById("buttonFg").value.trim());
+    tableau.extensions.settings.set("buttonBg", document.getElementById("buttonBg").value.trim());
+
 
     await tableau.extensions.settings.saveAsync();
     tableau.extensions.ui.closeDialog("saved");
