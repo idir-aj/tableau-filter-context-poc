@@ -2,108 +2,93 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Apply Context Filters (B)</title>
+  <title>Context Apply (B)</title>
   <script src="https://cdn.jsdelivr.net/gh/tableau/extensions-api/lib/tableau.extensions.1.latest.min.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 12px; }
-    label { display:block; margin-top: 8px; }
-    button { margin-top: 10px; padding: 8px 10px; width: 100%; }
-    .small { opacity:.75; font-size:12px; margin-top: 10px; white-space: pre-wrap; }
-    input { width: 100%; padding: 6px; box-sizing: border-box; }
+    body { font-family: sans-serif; padding: 8px; }
+    #status { font-size: 12px; opacity: .75; white-space: pre-wrap; }
+    .hidden { display:none; }
   </style>
 </head>
 <body>
-  <h3>Apply imported filters</h3>
-
-  <label>API Base URL</label>
-  <input id="apiBase" value="https://tableau-filter-context-poc.onrender.com" />
-
-  <label>Worksheet name (in B) to apply filters on</label>
-  <input id="wsName" placeholder="Exact worksheet name, e.g. Details" />
-
-  <label>Filter field names (comma-separated)</label>
-  <input id="filterNames" value="Pays,Produit,Categorie" />
-
-  <button id="applyBtn">Apply now</button>
-  <div id="status" class="small"></div>
+  <div id="status" class="hidden"></div>
 
 <script>
-(async function () {
-  await tableau.extensions.initializeAsync();
+(async () => {
+  await tableau.extensions.initializeAsync({ configure: openConfigDialog });
 
-  const status = (msg) => { document.getElementById("status").textContent = msg; };
+  // ✅ Hardcode API URL here
+  const API_BASE = "https://TON-API.onrender.com";
 
-async function getContextIdFromParam() {
-  const dashboard = tableau.extensions.dashboardContent.dashboard;
-  const params = await dashboard.getParametersAsync();
-  const p = params.find(x => x.name === "p_context_id");
-  if (!p) return null;
+  const statusEl = document.getElementById("status");
+  const showStatus = (m) => {
+    statusEl.textContent = m || "";
+    statusEl.classList.toggle("hidden", !m);
+  };
 
-  // Extensions API: value is in currentValue
-  const raw = p.currentValue && p.currentValue.value;
-  const s = (raw === null || raw === undefined) ? "" : String(raw).trim();
-  return s.length ? s : null;
-}
+  function getJsonSetting(key, fallback) {
+    const raw = tableau.extensions.settings.get(key);
+    if (!raw) return fallback;
+    try { return JSON.parse(raw); } catch { return fallback; }
+  }
 
-  async function applyFilters(worksheet, filters, wantedNames) {
-    for (const name of wantedNames) {
-      const values = filters[name];
-      if (!values || values.length === 0) {
-        // ALL => do nothing
-        continue;
-      }
-      await worksheet.applyFilterAsync(name, values, tableau.FilterUpdateType.Replace);
-    }
+  async function openConfigDialog() {
+    const configUrl = new URL("config.html", window.location.href).toString();
+    await tableau.extensions.ui.displayDialogAsync(configUrl, "", { height: 520, width: 520 });
+  }
+
+  async function getContextIdFromParam() {
+    const dashboard = tableau.extensions.dashboardContent.dashboard;
+    const params = await dashboard.getParametersAsync();
+    const p = params.find(x => x.name === "p_context_id");
+    if (!p) return null;
+    const raw = p.currentValue && p.currentValue.value;
+    const s = (raw === null || raw === undefined) ? "" : String(raw).trim();
+    return s.length ? s : null;
   }
 
   async function runApply() {
     try {
-      const apiBase = document.getElementById("apiBase").value.trim().replace(/\/$/, "");
-      const wsName = document.getElementById("wsName").value.trim();
-      const filterNames = document.getElementById("filterNames").value
-        .split(",").map(s => s.trim()).filter(Boolean);
+      const worksheetName = tableau.extensions.settings.get("worksheetName") || "";
+      const filterFieldNames = getJsonSetting("filterFieldNames", []);
 
-      if (!apiBase || !wsName) {
-        status("Please fill API Base URL and Worksheet name.");
+      if (!worksheetName || !Array.isArray(filterFieldNames) || filterFieldNames.length === 0) {
+        showStatus("Extension B non configurée.\n(Mode Edit → menu extension → Configure…)");
         return;
       }
 
       const contextId = await getContextIdFromParam();
       if (!contextId) {
-        status("No p_context_id parameter value → nothing to apply.");
+        // Silent (normal if user opens B directly)
+        showStatus(""); 
         return;
       }
-
-      status(`Loading context ${contextId}…`);
-      const resp = await fetch(`${apiBase}/contexts/${encodeURIComponent(contextId)}`);
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error(`GET /contexts/{id} failed: ${resp.status} ${txt}`);
-      }
-      const data = await resp.json();
 
       const dashboard = tableau.extensions.dashboardContent.dashboard;
-      const worksheet = dashboard.worksheets.find(w => w.name === wsName);
-      if (!worksheet) {
-        status(`Worksheet '${wsName}' not found.`);
-        return;
+      const ws = dashboard.worksheets.find(w => w.name === worksheetName);
+      if (!ws) throw new Error(`Worksheet '${worksheetName}' introuvable.`);
+
+      const resp = await fetch(`${API_BASE}/contexts/${encodeURIComponent(contextId)}`);
+      if (!resp.ok) throw new Error(`GET /contexts failed: ${resp.status} ${await resp.text()}`);
+      const data = await resp.json();
+      const filters = data.filters || {};
+
+      // Apply only configured filters (fieldName)
+      for (const fieldName of filterFieldNames) {
+        const values = filters[fieldName];
+        if (!values || values.length === 0) continue; // ALL => do nothing
+        await ws.applyFilterAsync(fieldName, values, tableau.FilterUpdateType.Replace);
       }
 
-      status("Applying filters…");
-      await applyFilters(worksheet, data.filters || {}, filterNames);
-      status("Done ✅ (User can now change filters freely)");
-
+      showStatus(""); // keep invisible on success
     } catch (e) {
       console.error(e);
-      status(String(e));
+      showStatus(String(e));
     }
   }
 
   // Auto-apply on load
   runApply();
-
-  // Manual re-apply button
-  document.getElementById("applyBtn").addEventListener("click", runApply);
 })();
 </script>
 </body>
