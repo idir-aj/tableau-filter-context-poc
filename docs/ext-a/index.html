@@ -95,7 +95,7 @@
       const contextId = data.context_id;
       status(`Opening B with p_context_id=${contextId}…`);
 
-      // ✅ Pass context via a Tableau parameter in B (NOT via reading parent URL in extension B)
+      // ✅ Pass context via a Tableau parameter in B
       const joinChar = targetUrl.includes("?") ? "&" : "?";
       const url = `${targetUrl}${joinChar}p_context_id=${encodeURIComponent(contextId)}`;
 
