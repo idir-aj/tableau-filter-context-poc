@@ -33,16 +33,17 @@
 
   const status = (msg) => { document.getElementById("status").textContent = msg; };
 
-  async function getContextIdFromParam() {
-    // Read Tableau parameter p_context_id (string) from Workbook B
-    const dashboard = tableau.extensions.dashboardContent.dashboard;
-    const params = await dashboard.getParametersAsync();
-    const p = params.find(x => x.name === "p_context_id");
-    if (!p) return null;
-    const val = await p.getValueAsync();
-    const s = (val === null || val === undefined) ? "" : String(val).trim();
-    return s.length ? s : null;
-  }
+async function getContextIdFromParam() {
+  const dashboard = tableau.extensions.dashboardContent.dashboard;
+  const params = await dashboard.getParametersAsync();
+  const p = params.find(x => x.name === "p_context_id");
+  if (!p) return null;
+
+  // Extensions API: value is in currentValue
+  const raw = p.currentValue && p.currentValue.value;
+  const s = (raw === null || raw === undefined) ? "" : String(raw).trim();
+  return s.length ? s : null;
+}
 
   async function applyFilters(worksheet, filters, wantedNames) {
     for (const name of wantedNames) {
