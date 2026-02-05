@@ -16,5 +16,8 @@
     <permissions>
       <permission>full data</permission>
     </permissions>
+    <context-menu>
+      <configure-context-menu-item />
+    </context-menu>
   </dashboard-extension>
 </manifest>
