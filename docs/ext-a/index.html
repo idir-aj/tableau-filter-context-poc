@@ -32,7 +32,7 @@
   }
   
   async function openConfigDialog() {
-    const configUrl = new URL("config.html", window.location.href).toString();
+    const configUrl = new URL("config.html?v=20260205-1015", window.location.href).toString();
     const result = await tableau.extensions.ui.displayDialogAsync(
       configUrl,
       "",
