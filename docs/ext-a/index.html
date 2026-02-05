@@ -32,18 +32,23 @@
   }
   
   async function openConfigDialog() {
-    const configUrl = new URL("config.html?v=20260205-1015", window.location.href).toString();
-    const result = await tableau.extensions.ui.displayDialogAsync(
-      configUrl,
-      "",
-      { height: 600, width: 520 }
-    );
+    const configUrl = new URL("config.html?v=20260205-1016", window.location.href).toString();
   
-    // Si l’utilisateur a cliqué "Save" dans le dialog
-    if (result === "saved") {
-      await tableau.extensions.settings.refreshAsync(); // récupère les nouvelles valeurs
-      applyButtonUxFromSettings();                      // applique immédiatement
+    try {
+      const result = await tableau.extensions.ui.displayDialogAsync(
+        configUrl,
+        "",
+        { height: 600, width: 520 }
+      );
+      console.log("Config dialog result:", result);
+    } catch (e) {
+      // Souvent: fermeture via X / comportement API = promise rejected
+      console.log("Config dialog closed (possibly saved):", e?.message || e);
     }
+  
+    // ✅ Toujours: recharger les settings et appliquer immédiatement
+    await tableau.extensions.settings.refreshAsync();
+    applyButtonUxFromSettings();
   }
 
   function mustGetConfig() {
