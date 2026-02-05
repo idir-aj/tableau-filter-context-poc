@@ -33,8 +33,28 @@
   const status = (msg) => document.getElementById("status").textContent = msg;
 
   function getContextIdFromUrl() {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("context_id");
+    // Tableau Cloud often puts parameters inside the hash:
+    // https://.../#/site/.../view?:iid=2&:showVizHome=no&context_id=XXXX
+    const href = window.location.href;
+  
+    // First try normal querystring
+    let id = new URLSearchParams(window.location.search).get("context_id");
+    if (id) return id;
+  
+    // Then try hash part
+    const hash = window.location.hash || "";
+    // Find the part after '?' in the hash (it may start with '?:')
+    const qPos = hash.indexOf("?");
+    if (qPos >= 0) {
+      const qs = hash.slice(qPos + 1); // includes ":iid=2&:showVizHome=no&context_id=..."
+      // URLSearchParams can parse keys like ":iid"
+      id = new URLSearchParams(qs).get("context_id");
+      if (id) return id;
+    }
+  
+    // Fallback: regex on full URL
+    const m = href.match(/[?&#]context_id=([^&#]+)/);
+    return m ? decodeURIComponent(m[1]) : null;
   }
 
   async function applyFilters(worksheet, filters, wantedNames) {
