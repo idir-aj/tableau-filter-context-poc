@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Config B</title>
+  <script src="https://cdn.jsdelivr.net/gh/tableau/extensions-api/lib/tableau.extensions.1.latest.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 14px; }
+    label { display:block; margin-top: 10px; font-size: 13px; }
+    select { width: 100%; padding: 8px; box-sizing: border-box; }
+    .box { margin-top: 12px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; max-height: 260px; overflow: auto; }
+    .row { display:flex; gap:10px; align-items:flex-start; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+    .row:last-child { border-bottom: none; }
+    .meta { font-size: 12px; opacity: .75; }
+    .actions { display:flex; gap:10px; margin-top: 14px; }
+    button { padding: 10px 12px; width: 100%; }
+  </style>
+</head>
+<body>
+  <h3>Configurer l’extension (B)</h3>
+
+  <label>Worksheet cible (dans B)</label>
+  <select id="wsSelect"></select>
+
+  <label>Filtres à appliquer (fieldName)</label>
+  <div id="filtersBox" class="box">Choisis une worksheet…</div>
+
+  <div class="actions">
+    <button id="saveBtn">Save</button>
+    <button id="cancelBtn">Cancel</button>
+  </div>
+
+<script>
+(async () => {
+  await tableau.extensions.initializeDialogAsync();
+  const dashboard = tableau.extensions.dashboardContent.dashboard;
+
+  const getJsonSetting = (key, fallback) => {
+    const raw = tableau.extensions.settings.get(key);
+    if (!raw) return fallback;
+    try { return JSON.parse(raw); } catch { return fallback; }
+  };
+
+  const savedWs = tableau.extensions.settings.get("worksheetName") || "";
+  const savedFieldNames = new Set(getJsonSetting("filterFieldNames", []));
+
+  const wsSelect = document.getElementById("wsSelect");
+  dashboard.worksheets.forEach(w => {
+    const opt = document.createElement("option");
+    opt.value = w.name;
+    opt.textContent = w.name;
+    wsSelect.appendChild(opt);
+  });
+  if (savedWs) wsSelect.value = savedWs;
+
+  async function renderFilters(wsName) {
+    const box = document.getElementById("filtersBox");
+    box.textContent = "Chargement…";
+
+    const ws = dashboard.worksheets.find(w => w.name === wsName);
+    const wsFilters = await ws.getFiltersAsync();
+
+    const unique = new Map();
+    for (const f of wsFilters) {
+      if (!f.fieldName) continue;
+      if (!unique.has(f.fieldName)) unique.set(f.fieldName, f);
+    }
+
+    box.innerHTML = "";
+    if (unique.size === 0) {
+      box.textContent = "Aucun filtre trouvé sur cette worksheet.";
+      return;
+    }
+
+    for (const [fieldName, f] of unique.entries()) {
+      const id = "cb_" + fieldName.replace(/[^a-z0-9]/gi, "_");
+
+      const row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML = `
+        <div><input type="checkbox" id="${id}"></div>
+        <div>
+          <div><b>${fieldName}</b></div>
+          <div class="meta">caption: ${f.caption || "(none)"}</div>
+        </div>
+      `;
+      box.appendChild(row);
+
+      const cb = row.querySelector("input");
+      cb.dataset.fieldName = fieldName;
+      cb.checked = savedFieldNames.has(fieldName);
+    }
+  }
+
+  wsSelect.addEventListener("change", () => renderFilters(wsSelect.value));
+  await renderFilters(wsSelect.value);
+
+  document.getElementById("saveBtn").addEventListener("click", async () => {
+    const worksheetName = wsSelect.value;
+
+    const chosen = Array.from(document.querySelectorAll("#filtersBox input[type=checkbox]"))
+      .filter(x => x.checked)
+      .map(x => x.dataset.fieldName);
+
+    tableau.extensions.settings.set("worksheetName", worksheetName);
+    tableau.extensions.settings.set("filterFieldNames", JSON.stringify(chosen));
+
+    await tableau.extensions.settings.saveAsync();
+    tableau.extensions.ui.closeDialog("saved");
+  });
+
+  document.getElementById("cancelBtn").addEventListener("click", () => {
+    tableau.extensions.ui.closeDialog("cancel");
+  });
+})();
+</script>
+</body>
+</html>
