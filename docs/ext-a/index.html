@@ -2,85 +2,67 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Save Context & Navigate</title>
+  <title>Save Context & Navigate (A)</title>
   <script src="https://cdn.jsdelivr.net/gh/tableau/extensions-api/lib/tableau.extensions.1.latest.min.js"></script>
   <style>
     body { font-family: sans-serif; padding: 12px; }
     label { display:block; margin-top: 8px; }
-    button { margin-top: 12px; padding: 8px 10px; }
-    .small { opacity: .75; font-size: 12px; }
-    input { width: 100%; padding: 6px; }
+    button { margin-top: 12px; padding: 8px 10px; width: 100%; }
+    .small { opacity: .75; font-size: 12px; margin-top: 10px; white-space: pre-wrap; }
+    input { width: 100%; padding: 6px; box-sizing: border-box; }
   </style>
 </head>
 <body>
-  <h3>Open Workbook B</h3>
+  <h3>Save filters & open Workbook B</h3>
 
   <label>API Base URL</label>
-  <input id="apiBase" value="https://YOUR_API_DOMAIN" />
+  <input id="apiBase" placeholder="https://your-api.onrender.com" />
 
-  <label>Worksheet name (where filters are applied)</label>
-  <input id="wsName" placeholder="ex: Overview" />
+  <label>Worksheet name (in A) that contains the filters</label>
+  <input id="wsName" placeholder="Exact worksheet name, e.g. Overview" />
 
   <label>Target Workbook B URL (base)</label>
-  <input id="targetUrl" placeholder="Paste full view URL of Workbook B (without context_id)" />
+  <input id="targetUrl" placeholder="Paste B view URL (no param), e.g. https://.../views/DashB/Dashboard1?:showVizHome=no" />
 
   <label>Filter field names (comma-separated)</label>
   <input id="filterNames" value="Pays,Produit,Categorie" />
 
-  <button id="goBtn">Save filters & Open B</button>
+  <button id="goBtn">Save & open B</button>
   <div id="status" class="small"></div>
 
 <script>
 (async function () {
   await tableau.extensions.initializeAsync();
 
-  const status = (msg) => document.getElementById("status").textContent = msg;
+  const status = (msg) => { document.getElementById("status").textContent = msg; };
 
-  function getAllSelectedValues(filter) {
-    // filter.appliedValues is array of { value } objects
-    // If "All" is selected, Tableau generally returns isAllSelected = true OR appliedValues empty depending on filter type.
-    // We'll treat "all" as: filter.isAllSelected === true OR appliedValues is empty.
+  function extractSelectedValues(filter) {
+    // ALL => return null (meaning: do not store/apply)
     const isAll = (filter.isAllSelected === true) || !filter.appliedValues || filter.appliedValues.length === 0;
     if (isAll) return null;
     return filter.appliedValues.map(v => String(v.value));
   }
 
-  async function readFiltersFromWorksheet(worksheet, wantedNames) {
-    const wsFilters = await worksheet.getFiltersAsync();
-    const out = {};
-
-    for (const name of wantedNames) {
-      const f = wsFilters.find(x => x.fieldName === name || x.caption === name);
-      if (!f) {
-        // On ignore si le filtre n'existe pas dans ce worksheet (POC)
-        continue;
-      }
-      const values = getAllSelectedValues(f);
-      out[name] = values; // null => ALL
-    }
-    return out;
-  }
-
   document.getElementById("goBtn").addEventListener("click", async () => {
     let popup = null;
     try {
-      // Open immediately to avoid popup blockers (must be synchronous with the click)
+      // Open immediately to avoid popup blockers
       popup = window.open("about:blank", "_blank");
-  
+
       status("Reading filters…");
-  
-      const apiBase = document.getElementById("apiBase").value.replace(/\/$/, "");
+
+      const apiBase = document.getElementById("apiBase").value.trim().replace(/\/$/, "");
       const wsName = document.getElementById("wsName").value.trim();
       const targetUrl = document.getElementById("targetUrl").value.trim();
       const filterNames = document.getElementById("filterNames").value
         .split(",").map(s => s.trim()).filter(Boolean);
-  
+
       if (!apiBase || !wsName || !targetUrl || filterNames.length === 0) {
-        status("Please fill API Base, worksheet name, target URL, and filter names.");
+        status("Please fill API Base URL, Worksheet name, Target URL, and Filter names.");
         if (popup && !popup.closed) popup.close();
         return;
       }
-  
+
       const dashboard = tableau.extensions.dashboardContent.dashboard;
       const worksheet = dashboard.worksheets.find(w => w.name === wsName);
       if (!worksheet) {
@@ -88,51 +70,44 @@
         if (popup && !popup.closed) popup.close();
         return;
       }
-  
+
       const wsFilters = await worksheet.getFiltersAsync();
       const filters = {};
-  
       for (const name of filterNames) {
         const f = wsFilters.find(x => x.fieldName === name || x.caption === name);
         if (!f) continue;
-  
-        const isAll = (f.isAllSelected === true) || !f.appliedValues || f.appliedValues.length === 0;
-        filters[name] = isAll ? null : f.appliedValues.map(v => String(v.value));
+        filters[name] = extractSelectedValues(f); // null => ALL
       }
-  
-      console.log("Filters payload:", filters);
-  
+
       status("Saving context…");
       const resp = await fetch(`${apiBase}/contexts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filters, ttl_hours: 24 })
       });
-  
+
       if (!resp.ok) {
         const txt = await resp.text();
         throw new Error(`POST /contexts failed: ${resp.status} ${txt}`);
       }
-  
+
       const data = await resp.json();
       const contextId = data.context_id;
-      console.log("context_id:", contextId);
-  
+      status(`Opening B with p_context_id=${contextId}…`);
+
+      // ✅ Pass context via a Tableau parameter in B (NOT via reading parent URL in extension B)
       const joinChar = targetUrl.includes("?") ? "&" : "?";
-      const url = `${targetUrl}${joinChar}context_id=${encodeURIComponent(contextId)}`;
-  
-      status(`Opening B with context_id=${contextId}…`);
-  
-      // Redirect the opened tab
+      const url = `${targetUrl}${joinChar}:p_context_id=${encodeURIComponent(contextId)}`;
+
       if (popup && !popup.closed) {
         popup.location.href = url;
       } else {
-        // Fallback
         window.open(url, "_blank");
       }
+
     } catch (e) {
-      status(String(e));
       console.error(e);
+      status(String(e));
       if (popup && !popup.closed) popup.close();
     }
   });
