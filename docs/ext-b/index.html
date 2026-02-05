@@ -29,6 +29,11 @@
 <script>
 (async function () {
   await tableau.extensions.initializeAsync();
+  status("EXT-B build: 2026-02-05 09:15"); // mets un timestamp unique
+  console.log("EXT-B build: 2026-02-05 09:15");
+  console.log("href:", window.location.href);
+  console.log("hash:", window.location.hash);
+  console.log("search:", window.location.search);
 
   const status = (msg) => document.getElementById("status").textContent = msg;
 
