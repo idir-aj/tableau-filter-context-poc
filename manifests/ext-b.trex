@@ -4,7 +4,7 @@
     <default-locale>fr_FR</default-locale>
     <name>Apply imported filters</name>
     <description>Reads context_id from URL and applies filters on load.</description>
-    <author name="Alex" email="alex@example.com" organization="POC" website="https://example.com"/>
+    <author name="Idir SAIDANI" email="idir.saidani@decathlon.com" organization="Decathlon" website="https://example.com"/>
     <min-api-version>1.0</min-api-version>
 
     <source-location>
