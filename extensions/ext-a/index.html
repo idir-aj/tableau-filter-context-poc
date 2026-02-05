@@ -62,53 +62,78 @@
   }
 
   document.getElementById("goBtn").addEventListener("click", async () => {
+    let popup = null;
     try {
+      // Open immediately to avoid popup blockers (must be synchronous with the click)
+      popup = window.open("about:blank", "_blank");
+  
       status("Reading filters…");
-
+  
       const apiBase = document.getElementById("apiBase").value.replace(/\/$/, "");
       const wsName = document.getElementById("wsName").value.trim();
       const targetUrl = document.getElementById("targetUrl").value.trim();
-      const filterNames = document.getElementById("filterNames").value.split(",").map(s => s.trim()).filter(Boolean);
-
+      const filterNames = document.getElementById("filterNames").value
+        .split(",").map(s => s.trim()).filter(Boolean);
+  
       if (!apiBase || !wsName || !targetUrl || filterNames.length === 0) {
         status("Please fill API Base, worksheet name, target URL, and filter names.");
+        if (popup && !popup.closed) popup.close();
         return;
       }
-
+  
       const dashboard = tableau.extensions.dashboardContent.dashboard;
       const worksheet = dashboard.worksheets.find(w => w.name === wsName);
       if (!worksheet) {
         status(`Worksheet '${wsName}' not found.`);
+        if (popup && !popup.closed) popup.close();
         return;
       }
-
-      const filters = await readFiltersFromWorksheet(worksheet, filterNames);
-
+  
+      const wsFilters = await worksheet.getFiltersAsync();
+      const filters = {};
+  
+      for (const name of filterNames) {
+        const f = wsFilters.find(x => x.fieldName === name || x.caption === name);
+        if (!f) continue;
+  
+        const isAll = (f.isAllSelected === true) || !f.appliedValues || f.appliedValues.length === 0;
+        filters[name] = isAll ? null : f.appliedValues.map(v => String(v.value));
+      }
+  
+      console.log("Filters payload:", filters);
+  
       status("Saving context…");
       const resp = await fetch(`${apiBase}/contexts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filters, ttl_hours: 24 })
       });
+  
       if (!resp.ok) {
         const txt = await resp.text();
         throw new Error(`POST /contexts failed: ${resp.status} ${txt}`);
       }
+  
       const data = await resp.json();
       const contextId = data.context_id;
-
-      status(`Opening B with context_id=${contextId}…`);
-
+      console.log("context_id:", contextId);
+  
       const joinChar = targetUrl.includes("?") ? "&" : "?";
       const url = `${targetUrl}${joinChar}context_id=${encodeURIComponent(contextId)}`;
-
-      // Open in same tab
-      //window.top.location.href = url;
-      await tableau.extensions.ui.openUrlAsync(url);
-
+  
+      status(`Opening B with context_id=${contextId}…`);
+  
+      // Redirect the opened tab
+      if (popup && !popup.closed) {
+        popup.location.href = url;
+      } else {
+        // Fallback
+        window.open(url, "_blank");
+      }
     } catch (e) {
       status(String(e));
       console.error(e);
+      if (popup && !popup.closed) popup.close();
     }
   });
 })();
