@@ -103,7 +103,8 @@
       const url = `${targetUrl}${joinChar}context_id=${encodeURIComponent(contextId)}`;
 
       // Open in same tab
-      window.top.location.href = url;
+      //window.top.location.href = url;
+      await tableau.extensions.ui.openUrlAsync(url);
 
     } catch (e) {
       status(String(e));
