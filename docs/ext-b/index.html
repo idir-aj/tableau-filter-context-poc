@@ -2,23 +2,24 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Apply Context Filters</title>
+  <title>Apply Context Filters (B)</title>
   <script src="https://cdn.jsdelivr.net/gh/tableau/extensions-api/lib/tableau.extensions.1.latest.min.js"></script>
   <style>
     body { font-family: sans-serif; padding: 12px; }
-    .small { opacity:.75; font-size:12px; }
-    input { width: 100%; padding: 6px; }
-    button { margin-top: 10px; padding: 8px 10px; }
+    label { display:block; margin-top: 8px; }
+    button { margin-top: 10px; padding: 8px 10px; width: 100%; }
+    .small { opacity:.75; font-size:12px; margin-top: 10px; white-space: pre-wrap; }
+    input { width: 100%; padding: 6px; box-sizing: border-box; }
   </style>
 </head>
 <body>
   <h3>Apply imported filters</h3>
 
   <label>API Base URL</label>
-  <input id="apiBase" value="https://YOUR_API_DOMAIN" />
+  <input id="apiBase" placeholder="https://your-api.onrender.com" />
 
-  <label>Worksheet name to apply filters on</label>
-  <input id="wsName" placeholder="ex: Details" />
+  <label>Worksheet name (in B) to apply filters on</label>
+  <input id="wsName" placeholder="Exact worksheet name, e.g. Details" />
 
   <label>Filter field names (comma-separated)</label>
   <input id="filterNames" value="Pays,Produit,Categorie" />
@@ -29,65 +30,46 @@
 <script>
 (async function () {
   await tableau.extensions.initializeAsync();
-  const status = (msg) => document.getElementById("status").textContent = msg;
-  
-  status("EXT-B build: 2026-02-05 09:15"); // mets un timestamp unique
-  console.log("EXT-B build: 2026-02-05 09:15");
-  console.log("href:", window.location.href);
-  console.log("hash:", window.location.hash);
-  console.log("search:", window.location.search);
-  
-  function getContextIdFromUrl() {
-    // Tableau Cloud often puts parameters inside the hash:
-    // https://.../#/site/.../view?:iid=2&:showVizHome=no&context_id=XXXX
-    const href = window.location.href;
-  
-    // First try normal querystring
-    let id = new URLSearchParams(window.location.search).get("context_id");
-    if (id) return id;
-  
-    // Then try hash part
-    const hash = window.location.hash || "";
-    // Find the part after '?' in the hash (it may start with '?:')
-    const qPos = hash.indexOf("?");
-    if (qPos >= 0) {
-      const qs = hash.slice(qPos + 1); // includes ":iid=2&:showVizHome=no&context_id=..."
-      // URLSearchParams can parse keys like ":iid"
-      id = new URLSearchParams(qs).get("context_id");
-      if (id) return id;
-    }
-  
-    // Fallback: regex on full URL
-    const m = href.match(/[?&#]context_id=([^&#]+)/);
-    return m ? decodeURIComponent(m[1]) : null;
+
+  const status = (msg) => { document.getElementById("status").textContent = msg; };
+
+  async function getContextIdFromParam() {
+    // Read Tableau parameter p_context_id (string) from Workbook B
+    const dashboard = tableau.extensions.dashboardContent.dashboard;
+    const params = await dashboard.getParametersAsync();
+    const p = params.find(x => x.name === "p_context_id");
+    if (!p) return null;
+    const val = await p.getValueAsync();
+    const s = (val === null || val === undefined) ? "" : String(val).trim();
+    return s.length ? s : null;
   }
 
   async function applyFilters(worksheet, filters, wantedNames) {
-    // Apply in sequence to keep it simple (and predictable)
     for (const name of wantedNames) {
       const values = filters[name];
       if (!values || values.length === 0) {
         // ALL => do nothing
         continue;
       }
-      // REPLACE => multi-select exact set
       await worksheet.applyFilterAsync(name, values, tableau.FilterUpdateType.Replace);
     }
   }
 
   async function runApply() {
     try {
-      const apiBase = document.getElementById("apiBase").value.replace(/\/$/, "");
+      const apiBase = document.getElementById("apiBase").value.trim().replace(/\/$/, "");
       const wsName = document.getElementById("wsName").value.trim();
-      const filterNames = document.getElementById("filterNames").value.split(",").map(s => s.trim()).filter(Boolean);
+      const filterNames = document.getElementById("filterNames").value
+        .split(",").map(s => s.trim()).filter(Boolean);
 
-      const contextId = getContextIdFromUrl();
-      if (!contextId) {
-        status("No context_id in URL → nothing to apply.");
+      if (!apiBase || !wsName) {
+        status("Please fill API Base URL and Worksheet name.");
         return;
       }
-      if (!apiBase || !wsName) {
-        status("Please fill API Base and worksheet name.");
+
+      const contextId = await getContextIdFromParam();
+      if (!contextId) {
+        status("No p_context_id parameter value → nothing to apply.");
         return;
       }
 
@@ -108,18 +90,18 @@
 
       status("Applying filters…");
       await applyFilters(worksheet, data.filters || {}, filterNames);
+      status("Done ✅ (User can now change filters freely)");
 
-      status("Done. (User can now change filters freely)");
     } catch (e) {
-      status(String(e));
       console.error(e);
+      status(String(e));
     }
   }
 
-  // auto-apply on load
+  // Auto-apply on load
   runApply();
 
-  // manual re-apply button
+  // Manual re-apply button
   document.getElementById("applyBtn").addEventListener("click", runApply);
 })();
 </script>
