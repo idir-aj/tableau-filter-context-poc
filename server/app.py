@@ -11,17 +11,22 @@ import snowflake.connector
 from dotenv import load_dotenv
 
 import queue
-import threading 
 
 load_dotenv()
 
 app = FastAPI(title="Tableau Filter Context API")
 
-POOL_SIZE = int(os.environ.get("SF_POOL_SIZE", "3"))
-_sf_pool: "queue.Queue[snowflake.connector.SnowflakeConnection]" = queue.Queue(maxsize=POOL_SIZE)
-_sf_lock = threading.Lock()
+# =========================================================
+# Config
+# =========================================================
 
-# ✅ CORS: en POC, on autorise tout. En prod, restreins aux domaines Tableau Cloud + ton hébergement extensions.
+TABLE = os.environ.get("SNOWFLAKE_TABLE", "FILTER_CONTEXT_VALUES")
+POOL_SIZE = int(os.environ.get("SF_POOL_SIZE", "3"))
+
+# =========================================================
+# CORS (POC = ouvert ; prod = restreindre)
+# =========================================================
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,6 +34,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# =========================================================
+# Snowflake connection + pool
+# =========================================================
+
+_sf_pool: "queue.Queue[snowflake.connector.SnowflakeConnection]" = queue.Queue(maxsize=POOL_SIZE)
+
 
 def sf_connect():
     return snowflake.connector.connect(
@@ -39,115 +51,155 @@ def sf_connect():
         database=os.environ["SNOWFLAKE_DATABASE"],
         schema=os.environ["SNOWFLAKE_SCHEMA"],
         role=os.environ.get("SNOWFLAKE_ROLE"),
-        client_session_keep_alive=True,
+        client_session_keep_alive=True,  # ⭐ important pour éviter reconnect
     )
 
-TABLE = os.environ.get("SNOWFLAKE_TABLE", "FILTER_CONTEXT_VALUES")
+
 def get_sf_conn():
     try:
         con = _sf_pool.get_nowait()
-        # petit ping pour vérifier que la session est OK
+
+        # ping léger pour vérifier session valide
         try:
-            con.cursor().execute("select 1")
+            cur = con.cursor()
+            cur.execute("select 1")
+            cur.close()
             return con
         except Exception:
-            try: con.close()
-            except: pass
+            try:
+                con.close()
+            except:
+                pass
             return sf_connect()
+
     except queue.Empty:
         return sf_connect()
+
 
 def put_sf_conn(con):
     try:
         _sf_pool.put_nowait(con)
     except queue.Full:
-        try: con.close()
-        except: pass
+        try:
+            con.close()
+        except:
+            pass
+
 
 @app.on_event("startup")
 def warm_pool():
-    # optionnel : préchauffe le pool au démarrage
+    print(f"Warm Snowflake pool size={POOL_SIZE}")
     for _ in range(POOL_SIZE):
         try:
             _sf_pool.put_nowait(sf_connect())
-        except Exception:
+        except Exception as e:
+            print("Pool warm failed:", e)
             break
 
-# ---------- Models ----------
+
+# =========================================================
+# Models
+# =========================================================
+
 class CreateContextRequest(BaseModel):
     filters: Dict[str, Optional[List[str]]] = Field(
         ...,
-        description="Map filter_name -> list of values. Use null/[] for ALL (meaning: do not apply)."
+        description="filter_name -> list of values; null/[] = ALL"
     )
     ttl_hours: int = Field(24, ge=1, le=24 * 30)
 
+
 class CreateContextResponse(BaseModel):
     context_id: str
+
 
 class GetContextResponse(BaseModel):
     context_id: str
     filters: Dict[str, List[str]]
 
-# ---------- Helpers ----------
+
+# =========================================================
+# Helpers
+# =========================================================
+
 def new_context_id() -> str:
-    # 6–10 chars is fine; keep URL short.
     return secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8]
+
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
-# ---------- Endpoints ----------
+
+# =========================================================
+# Endpoints
+# =========================================================
+
 @app.post("/contexts", response_model=CreateContextResponse)
 def create_context(req: CreateContextRequest):
+
     t0 = time.perf_counter()
+
     context_id = new_context_id()
     expires_at = utcnow() + timedelta(hours=req.ttl_hours)
 
     rows = []
     for fname, values in req.filters.items():
         if not values:
-            # ALL => do not store anything for this filter
             continue
         for v in values:
             rows.append((context_id, expires_at, fname, v))
+
     t1 = time.perf_counter()
 
     try:
         con = get_sf_conn()
         t2 = time.perf_counter()
+
         cur = con.cursor()
+        t3 = t2
+
         try:
             if rows:
                 cur.executemany(
                     f"""
-                    insert into {TABLE} (CONTEXT_ID, EXPIRES_AT, FILTER_NAME, FILTER_VALUE)
+                    insert into {TABLE}
+                    (CONTEXT_ID, EXPIRES_AT, FILTER_NAME, FILTER_VALUE)
                     values (%s, %s, %s, %s)
                     """,
                     rows
                 )
+                con.commit()
                 t3 = time.perf_counter()
+
         finally:
             cur.close()
             put_sf_conn(con)
             t4 = time.perf_counter()
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Snowflake insert failed: {e}")
-    
-    print({
-        "build_rows": round(t1-t0, 3),
-        "connect": round(t2-t1, 3),
-        "insert": round(t3-t2, 3),
-        "close": round(t4-t3, 3),
-        "total": round(t4-t0, 3),
+
+    print("TIMING_CREATE_CONTEXT", {
         "rows": len(rows),
+        "build": round(t1 - t0, 3),
+        "connect": round(t2 - t1, 3),
+        "insert": round(t3 - t2, 3),
+        "release": round(t4 - t3, 3),
+        "total": round(t4 - t0, 3),
     })
 
     return CreateContextResponse(context_id=context_id)
 
+
 @app.get("/contexts/{context_id}", response_model=GetContextResponse)
 def get_context(context_id: str):
+
+    t0 = time.perf_counter()
+
     try:
         con = get_sf_conn()
+        t1 = time.perf_counter()
+
         cur = con.cursor()
         try:
             cur.execute(
@@ -163,6 +215,8 @@ def get_context(context_id: str):
         finally:
             cur.close()
             put_sf_conn(con)
+            t2 = time.perf_counter()
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Snowflake read failed: {e}")
 
@@ -170,5 +224,11 @@ def get_context(context_id: str):
     for fname, fval in results:
         filters.setdefault(fname, []).append(fval)
 
-    # context_id peut exister avec 0 ligne (tous ALL) => filters={}
+    print("TIMING_GET_CONTEXT", {
+        "rows": len(results),
+        "connect": round(t1 - t0, 3),
+        "query": round(t2 - t1, 3),
+        "total": round(t2 - t0, 3),
+    })
+
     return GetContextResponse(context_id=context_id, filters=filters)
