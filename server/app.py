@@ -88,8 +88,7 @@ def create_context(req: CreateContextRequest):
                     """,
                     rows
                 )
-            # If rows is empty (everything ALL), we still return an id (valid context: apply nothing)
-        t3 = time.perf_counter()
+                t3 = time.perf_counter()
         finally:
             cur.close()
             con.close()
