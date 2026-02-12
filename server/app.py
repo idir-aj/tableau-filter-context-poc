@@ -61,6 +61,7 @@ def utcnow() -> datetime:
 # ---------- Endpoints ----------
 @app.post("/contexts", response_model=CreateContextResponse)
 def create_context(req: CreateContextRequest):
+    t0 = time.perf_counter()
     context_id = new_context_id()
     expires_at = utcnow() + timedelta(hours=req.ttl_hours)
 
@@ -71,9 +72,11 @@ def create_context(req: CreateContextRequest):
             continue
         for v in values:
             rows.append((context_id, expires_at, fname, v))
+    t1 = time.perf_counter()
 
     try:
         con = sf_connect()
+        t2 = time.perf_counter()
         cur = con.cursor()
         try:
             if rows:
@@ -85,11 +88,22 @@ def create_context(req: CreateContextRequest):
                     rows
                 )
             # If rows is empty (everything ALL), we still return an id (valid context: apply nothing)
+        t3 = time.perf_counter()
         finally:
             cur.close()
             con.close()
+            t4 = time.perf_counter()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Snowflake insert failed: {e}")
+    
+    print({
+        "build_rows": round(t1-t0, 3),
+        "connect": round(t2-t1, 3),
+        "insert": round(t3-t2, 3),
+        "close": round(t4-t3, 3),
+        "total": round(t4-t0, 3),
+        "rows": len(rows),
+    })
 
     return CreateContextResponse(context_id=context_id)
 
