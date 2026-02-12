@@ -160,13 +160,11 @@ def create_context(req: CreateContextRequest):
 
         try:
             if rows:
-                cur.executemany(
-                    f"""
-                    insert into {TABLE}
-                    (CONTEXT_ID, EXPIRES_AT, FILTER_NAME, FILTER_VALUE)
-                    values (%s, %s, %s, %s)
-                    """,
-                    rows
+                values_sql = ",".join(["(%s,%s,%s,%s)"] * len(rows))
+                flat = [item for row in rows for item in row]
+                cur.execute(
+                    f"insert into {TABLE} (CONTEXT_ID, EXPIRES_AT, FILTER_NAME, FILTER_VALUE) values {values_sql}",
+                    flat
                 )
                 con.commit()
                 t3 = time.perf_counter()
